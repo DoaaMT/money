@@ -19,8 +19,14 @@ describe Money, "formatting" do
   end
 
   context 'without locale_backend' do
-    before { Money.locale_backend = nil }
-    after { Money.locale_backend = :legacy }
+    around do |example|
+      previous_locale_backend = Money.locale_backend
+      Money.locale_backend = nil
+
+      example.run
+
+      Money.locale_backend = Money::LocaleBackend::BACKENDS.key(previous_locale_backend.class)
+    end
 
     subject(:money) { Money.new(1099_99, 'USD') }
 
@@ -31,23 +37,7 @@ describe Money, "formatting" do
     end
   end
 
-  context "with i18n but use_i18n = false" do
-    before :each do
-      reset_i18n
-      I18n.locale = :de
-      I18n.backend.store_translations(
-          :de,
-          number: { currency: { format: { delimiter: ".", separator: "," } } }
-      )
-      Money.use_i18n = false
-    end
-
-    after :each do
-      reset_i18n
-      I18n.locale = :en
-      Money.use_i18n = true
-    end
-
+  context "without i18n" do
     subject(:money) { Money.empty("USD") }
 
     it "should use ',' as the thousands separator" do
@@ -59,7 +49,7 @@ describe Money, "formatting" do
     end
   end
 
-  context "with i18n" do
+  context "with i18n", :i18n do
     after :each do
       reset_i18n
       I18n.locale = :en
@@ -528,20 +518,6 @@ describe Money, "formatting" do
       end
     end
 
-    describe ":symbol_position option" do
-      it "inserts currency symbol before the amount when set to :before" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :before)).to eq "€1.234.567,12"
-      end
-
-      it "inserts currency symbol after the amount when set to :after" do
-        expect(Money.us_dollar(1_000_000_000_12).format(symbol_position: :after)).to eq "1,000,000,000.12 $"
-      end
-
-      it "raises an ArgumentError when passed an invalid option" do
-        expect{Money.euro(0).format(symbol_position: :befor)}.to raise_error(ArgumentError)
-      end
-    end
-
     describe ":sign_before_symbol option" do
       specify "(sign_before_symbol: true) works as documented" do
         expect(Money.us_dollar(-100000).format(sign_before_symbol: true)).to eq "-$1,000.00"
@@ -550,34 +526,6 @@ describe Money, "formatting" do
       specify "(sign_before_symbol: false) works as documented" do
         expect(Money.us_dollar(-100000).format(sign_before_symbol: false)).to eq "$-1,000.00"
         expect(Money.us_dollar(-100000).format(sign_before_symbol: nil)).to eq "$-1,000.00"
-      end
-    end
-
-    describe ":symbol_before_without_space option" do
-      it "does not insert space between currency symbol and amount when set to true" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :before, symbol_before_without_space: true)).to eq "€1.234.567,12"
-      end
-
-      it "inserts space between currency symbol and amount when set to false" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :before, symbol_before_without_space: false)).to eq "€ 1.234.567,12"
-      end
-
-      it "defaults to true" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :before)).to eq "€1.234.567,12"
-      end
-    end
-
-    describe ":symbol_after_without_space option" do
-      it "does not insert space between amount and currency symbol when set to true" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :after, symbol_after_without_space: true)).to eq "1.234.567,12€"
-      end
-
-      it "inserts space between amount and currency symbol when set to false" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :after, symbol_after_without_space: false)).to eq "1.234.567,12 €"
-      end
-
-      it "defaults to false" do
-        expect(Money.euro(1_234_567_12).format(symbol_position: :after)).to eq "1.234.567,12 €"
       end
     end
 
@@ -650,15 +598,20 @@ describe Money, "formatting" do
         end
       end
 
-      describe "with i18n = true" do
+      describe "with i18n", :i18n do
         before do
           Money.use_i18n = true
           reset_i18n
           I18n.locale = :de
-          I18n.backend.store_translations(
-              :de,
-              number: { currency: { format: { delimiter: ".", separator: "," } } }
-          )
+          I18n.backend.store_translations(:de, number: {
+            currency: {
+              format: {
+                delimiter: '.',
+                separator: ',',
+                format: '%u %n'
+              }
+            }
+          })
         end
 
         after do
@@ -667,13 +620,13 @@ describe Money, "formatting" do
         end
 
         it 'does round fractional when set to true' do
-          expect(Money.new(BigDecimal('12.1'), "USD").format(rounded_infinite_precision: true)).to eq "$0,12"
-          expect(Money.new(BigDecimal('12.5'), "USD").format(rounded_infinite_precision: true)).to eq "$0,13"
-          expect(Money.new(BigDecimal('123.1'), "BHD").format(rounded_infinite_precision: true)).to eq "ب.د0,123"
-          expect(Money.new(BigDecimal('123.5'), "BHD").format(rounded_infinite_precision: true)).to eq "ب.د0,124"
-          expect(Money.new(BigDecimal('100.1'), "USD").format(rounded_infinite_precision: true)).to eq "$1,00"
-          expect(Money.new(BigDecimal('109.5'), "USD").format(rounded_infinite_precision: true)).to eq "$1,10"
-          expect(Money.new(BigDecimal('1'), "MGA").format(rounded_infinite_precision: true)).to eq "Ar0,2"
+          expect(Money.new(BigDecimal('12.1'), "USD").format(rounded_infinite_precision: true)).to eq "$ 0,12"
+          expect(Money.new(BigDecimal('12.5'), "USD").format(rounded_infinite_precision: true)).to eq "$ 0,13"
+          expect(Money.new(BigDecimal('123.1'), "BHD").format(rounded_infinite_precision: true)).to eq "ب.د 0,123"
+          expect(Money.new(BigDecimal('123.5'), "BHD").format(rounded_infinite_precision: true)).to eq "ب.د 0,124"
+          expect(Money.new(BigDecimal('100.1'), "USD").format(rounded_infinite_precision: true)).to eq "$ 1,00"
+          expect(Money.new(BigDecimal('109.5'), "USD").format(rounded_infinite_precision: true)).to eq "$ 1,10"
+          expect(Money.new(BigDecimal('1'), "MGA").format(rounded_infinite_precision: true)).to eq "Ar 0,2"
         end
       end
     end

@@ -1,0 +1,46 @@
+version: 2
+
+defaults: &defaults
+  working_directory: ~/repo
+
+  steps:
+    - checkout
+
+    - run:
+        name: Install dependencies
+        command: |
+          bundle install --jobs=4 --retry=3 --path vendor/bundle
+
+    - run:
+        name: Run tests
+        command: |
+          bundle exec rspec --format RspecJunitFormatter --out /tmp/test-results/rspec.xml --format progress
+
+    - store_test_results:
+        path: /tmp/test-results
+
+    - store_artifacts:
+        path: /tmp/test-results
+        destination: test-results
+
+jobs:
+  "ruby-2.3":
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.3
+  "ruby-2.4":
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.4
+  "ruby-2.5":
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.5
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "ruby-2.3"
+      - "ruby-2.4"
+      - "ruby-2.5"

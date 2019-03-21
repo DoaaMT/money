@@ -168,7 +168,7 @@ class Money
     @use_i18n = true
 
     # Default to using legacy locale backend
-    self.locale_backend = :legacy
+    self.locale_backend = :currency
 
     # Default to not using infinite precision cents
     self.infinite_precision = false
